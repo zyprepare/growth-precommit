@@ -1,0 +1,60 @@
+#!/bin/sh
+
+#暂存区文件
+files=$(git diff --cached --name-only)
+#当前分支
+br=$(git symbolic-ref --short -q HEAD)
+echo $br
+
+#如果文件列表为空，退出执行环境，继续执行commit操作
+if [[ $files = "" ]] ; then
+    exit 1
+fi
+
+result=0
+msg=""
+
+# 循环文件列表
+for file in ${files}; do
+    # 判断文件是否存在(-e 表示 exists)
+    if [ ! -e $file ] ; then
+        continue
+    fi
+
+    if [ $file = "pre-commit" ] ; then
+        continue
+    fi
+
+    #查询有冲突的文件
+    grep "<<<<<<< HEAD" $file > /dev/null
+
+    # 如果有冲突，标记为失败
+    if [[ $? = 0 ]] ; then
+        result=1
+        msg="❌ there are unresolved conflicts, git commit denied"
+
+        echo $file
+    fi
+
+    #如果是master分支，判断文件中是否有静态资源引用预发的域名(beta-static.jd.com)
+    grep "beta-static.jd.com" $file > /dev/null
+
+    # echo $file $?
+
+    # 如果master分支有预发域名，标记为失败
+    if [[ $? = 0 ]] && [[ $br = "master" ]] ; then
+      result=1
+      msg="❌ assets domain is beta-static.jd.com, git commit denied"
+
+      echo $file
+    fi
+done;
+
+# 有文件未通过检验，退出执行环境，中断commit操作
+if [[ $result != 0 ]] ; then
+    echo $msg
+    exit 1
+fi
+
+echo "git commit success"
+exit 0
